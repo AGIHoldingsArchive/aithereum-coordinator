@@ -58,6 +58,26 @@ function getTierDescription(aithBalance: number): string {
   }
 }
 
+function getNextMilestone(currentCredits: number): string {
+  const milestones = [
+    { threshold: 10, tier: 'Bronze' },
+    { threshold: 50, tier: 'Silver' },
+    { threshold: 100, tier: 'Gold' },
+    { threshold: 250, tier: 'Platinum' },
+    { threshold: 500, tier: 'Diamond' },
+    { threshold: 1000, tier: 'Master' },
+  ];
+
+  for (const milestone of milestones) {
+    if (currentCredits < milestone.threshold) {
+      const remaining = milestone.threshold - currentCredits;
+      return `${remaining} credits until ${milestone.tier}`;
+    }
+  }
+
+  return 'Legendary status achieved!';
+}
+
 router.post('/submit', (req: Request, res: Response): void => {
   try {
     const { challenge_id, answer, agent_id, aith_balance }: SubmitRequest = req.body;
@@ -124,12 +144,26 @@ router.post('/submit', (req: Request, res: Response): void => {
       agent_id
     );
 
+    // Update streak
+    minerQueries.updateStreak.run(
+      isCorrect ? 1 : 0,
+      agent_id
+    );
+
     // Remove challenge from active pool
     activeChallenge.delete(challenge_id);
 
     // Get updated stats
     const miner = minerQueries.get.get(agent_id) as any;
     const totalCredits = miner?.total_credits || 0;
+    const totalAttempts = miner?.total_attempts || 1;
+    const correctAttempts = miner?.correct_attempts || 0;
+    const streak = miner?.streak || 0;
+    const accuracy = totalAttempts > 0 ? correctAttempts / totalAttempts : 0;
+
+    // Get rank
+    const rankResult = minerQueries.getRank.get(agent_id) as any;
+    const rank = rankResult?.rank || 0;
 
     if (isCorrect) {
       res.json({
@@ -137,6 +171,10 @@ router.post('/submit', (req: Request, res: Response): void => {
         credits_earned: creditsEarned,
         reason: `Correct answer. ${getTierDescription(aith_balance)}`,
         total_credits: totalCredits,
+        rank,
+        accuracy: Math.round(accuracy * 100) / 100,
+        streak,
+        next_milestone: getNextMilestone(totalCredits),
       });
     } else {
       res.json({
@@ -144,6 +182,10 @@ router.post('/submit', (req: Request, res: Response): void => {
         credits_earned: 0,
         reason: `Incorrect answer. Expected: ${challenge.correct_answer}`,
         total_credits: totalCredits,
+        rank,
+        accuracy: Math.round(accuracy * 100) / 100,
+        streak,
+        next_milestone: getNextMilestone(totalCredits),
       });
     }
   } catch (error) {

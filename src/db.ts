@@ -25,6 +25,7 @@ export function initializeDatabase() {
       correct_attempts INTEGER DEFAULT 0,
       total_credits INTEGER DEFAULT 0,
       claimed_credits INTEGER DEFAULT 0,
+      streak INTEGER DEFAULT 0,
       created_at TEXT,
       last_seen TEXT
     );
@@ -55,6 +56,14 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_receipts_agent ON receipts(agent_id);
   `);
 
+  // Add streak column to existing tables (migration)
+  try {
+    db.exec(`ALTER TABLE miners ADD COLUMN streak INTEGER DEFAULT 0`);
+    console.log('Added streak column to miners table');
+  } catch (e) {
+    // Column already exists
+  }
+
   console.log('Database initialized at:', DB_PATH);
 }
 
@@ -63,6 +72,7 @@ export const minerQueries: {
   upsert: Statement;
   get: Statement;
   updateStats: Statement;
+  updateStreak: Statement;
   getLeaderboard: Statement;
   getRank: Statement;
 } = {
@@ -85,8 +95,14 @@ export const minerQueries: {
     WHERE agent_id = ?
   `),
 
+  updateStreak: db.prepare(`
+    UPDATE miners
+    SET streak = CASE WHEN ? = 1 THEN streak + 1 ELSE 0 END
+    WHERE agent_id = ?
+  `),
+
   getLeaderboard: db.prepare(`
-    SELECT agent_id, total_credits, total_attempts, correct_attempts,
+    SELECT agent_id, total_credits, total_attempts, correct_attempts, streak,
            ROUND(CAST(correct_attempts AS REAL) / NULLIF(total_attempts, 0), 2) as accuracy,
            last_seen
     FROM miners

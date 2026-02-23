@@ -5,6 +5,9 @@ import { challengeRouter } from './routes/challenge';
 import { submitRouter } from './routes/submit';
 import { statsRouter } from './routes/stats';
 import { receiptRouter } from './routes/receipt';
+import { registerRouter } from './routes/register';
+import { adminRouter } from './routes/admin';
+import { rateLimitChallenge, rateLimitSubmit } from './middleware/rateLimit';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,10 +35,14 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // Routes
-app.use('/', challengeRouter);
-app.use('/', submitRouter);
+app.use('/', registerRouter);
 app.use('/', statsRouter);
 app.use('/', receiptRouter);
+app.use('/', adminRouter);
+
+// Rate-limited routes
+app.use('/', rateLimitChallenge, challengeRouter);
+app.use('/', rateLimitSubmit, submitRouter);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
